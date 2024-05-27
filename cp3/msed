@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import sys
+from nfa import match, group_match
+from re_to_nfa import re_to_nfa
+from re_groups import get_group_dic
+
+def exec_cmd(string, cmd):      
+    if cmd[0] == '/':           # branch
+        i = 1
+        while i < len(cmd):
+            if cmd[i] == '/':
+                break
+            i += 1
+        regexp = cmd[1:i]
+        jr_label = cmd[i+2:]
+        # print("cmd is ", cmd)
+        # print("regex is ", regexp)
+        # print("string is", string)
+        # print("jr_label is ", jr_label)
+        accept, nfa, group_num_table = re_to_nfa(regexp)
+
+
+        if match(nfa, string):
+            return string, jr_label, None
+        #does not match the regex, just return the string
+        else:
+            return string, None, None  
+
+    elif cmd[:2] == 's/':       # substitution
+        i = 2
+        while i < len(cmd):
+            if cmd[i] == '/':
+                break
+            i += 1
+        regexp = cmd[2:i]
+
+        # print("cmd is ", cmd)
+        # print("regex is ", regexp)
+        # print("string is", string)
+
+        replacement = cmd[i+1:-1]
+        # print(f'regexp: {regexp}, replacement: {replacement}')
+        replacement_list = []
+        i = 0
+        length = len(replacement)
+        while i < length:
+            if replacement[i] == "\\":
+                i += 1
+                group_n = ''
+                if i < length - 1 and replacement[i:i+2] == 'g<':
+                    i += 2
+                    while i < length and replacement[i].isdigit():
+                        group_n += replacement[i]
+                        i += 1
+                    i += 1
+                else:
+                    while i < length and replacement[i].isdigit():
+                        group_n += replacement[i]
+                        i += 1
+                replacement_list.append(int(group_n))
+            # if the character is not the number, such like ^ in "\1^\2", then just append it into the replacement_list
+            else:
+                replacement_list.append(replacement[i])  
+                i += 1
+        # print(f'regexp: {regexp}, replacement: {replacement_list}')
+                
+        accept, nfa, group_num_table = re_to_nfa(regexp)
+        #does not match the regex, just return the string
+        if not accept:
+            # print("regexp not match")
+            return string, None, None
+
+        accept, path = group_match(nfa, string) 
+        if not accept:
+            # print("nfa not match")
+            return string, None, None
+
+        stack_dic = get_group_dic(path, string)
+        group_dic = {}      # {group_num : string_part}
+        for fake_group_num, string_part in stack_dic.items():
+            group_dic[group_num_table[fake_group_num]] = string_part
+
+        # print(group_dic)
+        res = ''
+        for string_part in replacement_list:
+            # check if the element is number, which indicates group number
+            if type(string_part) == int:
+                try:
+                    res += group_dic[string_part]
+                except KeyError:
+                    pass 
+            # not a number such as ^, just add it to the back
+            else:
+                res += string_part
+        # print(res)
+        return res, None, None
+        
+
+    else:                       # label eg. :loop
+        # print(f'label: {cmd[1:]}')
+        return string, None, cmd[1:]
+
+
+def main(arguments=sys.argv[1:]):
+    length = len(arguments)
+    str_file = sys.stdin
+    cmd_file = None
+    cmd_lst = []
+    i = 0
+    while i < length:
+        if arguments[i] == '-f':
+            i += 1
+            cmd_file = open(f'{arguments[i]}', 'r')
+            cmd_lst += [line.strip() for line in cmd_file]
+        elif arguments[i] == '-e':
+            i += 1
+            cmd_lst.append(arguments[i])
+        else:
+            str_file = open(f'{arguments[i]}', 'r') 
+        i += 1
+    # print(cmd_lst)
+
+    for string in str_file:
+        labels = {}
+        i = 0
+        while i < len(cmd_lst):
+            if cmd_lst[i][0] == ":":
+                labels[cmd_lst[i][1:]] = i
+            i += 1
+
+        i = 0
+        while i < len(cmd_lst):
+            string, jr_label, _ = exec_cmd(string.strip(), cmd_lst[i])
+            # print(string)
+            if jr_label:
+                i = labels[jr_label]
+            i += 1
+
+            if string == "reject":
+                break
+            if string[0:6] == "accept":
+                break
+        # if string[0:6] != "accept":
+        #     string = "reject"
+        print(string)
+
+    if str_file != sys.stdin:
+        str_file.close()
+
+
+            
+
+if __name__ == '__main__':
+    main()

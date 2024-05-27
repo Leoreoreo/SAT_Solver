@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+import re
+import sys
+
+def cnf_to_re(cnf_file, re_file, string_file):
+
+    with open(cnf_file, 'r') as f:
+        clauses = f.readlines()
+
+    cnf = []            # type: [[1, 2, 3], [-1, -2, 3], ...]
+    variables = set()
+
+    for clause in clauses:      
+        literals = [int(s) for s in clause.split()]
+        for i in literals:
+            variables.add(abs(i))
+        cnf.append(literals)
+    
+    len_var = len(variables)
+    w = "x" * len_var + ";"
+    regexp = "(|x)" * len_var + "x*;"
+
+    for clause in cnf:
+        w += 'x,'
+        regexp += '(' 
+        lst = []
+        for i in clause:
+            if i > 0:
+                lst.append(f'\\g<{i}>')
+            else:
+                lst.append(f'x\\g<{-i}>')
+        regexp += '|'.join(lst)
+        regexp += '),'  
+    # print(regexp)
+    # print(w)
+
+    with open(re_file, 'w') as f:
+        f.write(regexp)
+
+    with open(string_file, 'w') as f:
+        f.write(w)
+
+def main(arguments = sys.argv[1:]):
+    if len(arguments) != 3:
+        return
+    cnf_file, re_file, string_file = arguments
+    cnf_to_re(cnf_file, re_file, string_file)
+
+if __name__ == "__main__":
+    main()

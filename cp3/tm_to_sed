@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+from turing_machine import TM, read_TM
+import sys
+
+def convert_sed(tm):
+    chunk = "("
+    for index, tape_symbol in enumerate(tm.tape_symbols, 1):
+        chunk += tape_symbol
+        if index != len(tm.tape_symbols):
+            chunk += "|"
+
+    chunk += ")"  # chunk is "(0|x|_)"
+    
+    allstate = "("
+    for index, state in enumerate(tm.states, 1):
+        allstate += state
+        if index != len(tm.states):
+            allstate += "|"
+    allstate += ")"
+
+    print(f"s/({chunk}*)/[{tm.start_state}]\\g<1>/")  # the first line, add a mark at the beginning, act as the pointer
+
+    print(f"/[{tm.start_state}]({chunk}*)/b{tm.start_state}")  # the turing machine needs to start at the start state
+
+    # {'q1' : {'0' : {('q2', '_', 'R')}, '1':...}, 'q2':{...}}
+    for from_start, read_symbols in tm.transitions.items():
+        print(":" + from_start)
+        for read_symbol, go_set in read_symbols.items():
+            print(f"s/({chunk}*)[{from_start}]/\\g<1>[{from_start}]_/")      # the situation where the pointer reach the end
+            print(f"s/({chunk}*)[{from_start}loop]({chunk}*)/\\g<1>[{from_start}]\\g<3>/")   # if the state contains the key word loop, take that out
+            if go_set[2] == "R":
+                if from_start == go_set[0]: # this is a loop 
+                    print(f"s/({chunk}*)[{from_start}]({read_symbol})({chunk}*)/\\g<1>{go_set[1]}[{go_set[0]}loop]\\g<4>/")
+                    print(f"/({chunk}*)[{go_set[0]}loop]({chunk}*)/b{go_set[0]}")
+                else:
+                    print(f"s/({chunk}*)[{from_start}]({read_symbol})({chunk}*)/\\g<1>{go_set[1]}[{go_set[0]}]\\g<4>/")
+                    print(f"/({chunk}*)[{go_set[0]}]({chunk}*)/b{go_set[0]}")
+
+            else:
+                if from_start == go_set[0]:
+                    print(f"s/[{from_start}]({read_symbol})({chunk}*)/[{go_set[0]}loop]{go_set[1]}\\g<2>/")
+                    print(f"s/({chunk}*){chunk}[{from_start}]({read_symbol})({chunk}*)/\\g<1>[{go_set[0]}loop]\\g<3>{go_set[1]}\\g<5>/")
+                    print(f"/({chunk}*)[{go_set[0]}loop]({chunk}*)/b{go_set[0]}")
+                else:
+                    print(f"s/[{from_start}]({read_symbol})({chunk}*)/[{go_set[0]}]{go_set[1]}\\g<2>/")
+                    print(f"s/({chunk}*){chunk}[{from_start}]({read_symbol})({chunk}*)/\\g<1>[{go_set[0]}]\\g<3>{go_set[1]}\\g<5>/")
+                    print(f"/({chunk}*)[{go_set[0]}]({chunk}*)/b{go_set[0]}")
+
+    
+    print(":qreject")
+    print(f"s/({chunk}*)[qreject]({chunk}*)/reject/")
+    print(":qaccept")
+    print(f"s/({chunk}*)[qaccept]({chunk}*)/accept:\\g<1>\\g<3>/")
+    print(f"s/({chunk}*)[{allstate}]({chunk}*)/reject/")
+    
+
+def main(arguments=sys.argv[1:]):
+    argument = arguments[0]
+    tm = read_TM(argument)
+    #tm.print()
+
+    convert_sed(tm)
+
+if __name__ == '__main__':
+    main()

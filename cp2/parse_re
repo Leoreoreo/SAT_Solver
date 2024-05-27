@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+import sys
+import string
+
+U = {chr(i) for i in range(0, 9000)}  # Unicode range
+
+# Define the Unicode character you want to exclude
+exclude_character = '⊣'
+
+# Calculate T = U \ {⊣}
+T = U - {exclude_character}
+
+# Define the set of characters to exclude
+exclude_set = {'(', ')', '*', '|', '\\'}
+
+# Calculate Σ = T \ {(, ), *, |, \}
+Σ = set(string.ascii_lowercase)
+
+V = {"E", "M", "T", "F", "P"}
+
+Γ = V | T | {"$"}
+
+transitions = {
+    ("a", "&"): {"below": {"$", "(", "|", "T"}, "next": T | {"⊣"}, "push": ("a", None)},
+    ("(", "&"): {"below": {"$", "(", "|", "T"}, "next": T | {"⊣"}, "push": ("(", None)},
+    (")", "&"): {"below": {"E"}, "next": T | {"⊣"}, "push": (")", None)},
+    ("|", "&"): {"below": {"E"}, "next": T | {"⊣"}, "push": ("|", None)},
+    ("*", "&"): {"below": {"P"}, "next": T | {"⊣"}, "push": ("*", None)},
+    ("&", "E|M"): {"below": Γ, "next": T | {"⊣"}, "push": ("E", "union")},
+    ("&", "M"): {"below": {"$", "("}, "next": T | {"⊣"}, "push": ("E", None)},
+    ("&", "&"): {"below": {"$", "(", "|"}, "next": {"|", ")", "⊣"}, "push": ("M", "epsilon")},
+    ("&", "T"): {"below": Γ, "next": {'|', ')', '⊣'}, "push": ('M', None)},
+    ("&", "TF"): {"below": Γ, "next": T | {"⊣"}, "push": ('T', 'concat')},
+    ("&", "F"): {"below": {"$", "(", "|"}, "next": T | {"⊣"}, "push": ('T', None)},
+    ("&", "P*"): {"below": Γ, "next": T | {"⊣"}, "push": ('F', 'star')},
+    ("&", "P"): {"below": Γ, "next": U - {"*"}, "push": ('F', None)},
+    ("&", "a"): {"below": Γ, "next": T | {"⊣"}, "push": ('P', 'symbol')},
+    ("&", "(E)"): {"below": Γ, "next": T | {"⊣"}, "push": ('P', None)},
+}
+
+
+def parser(s):
+    s = s + "⊣"
+    stack_symbol = ["$"]
+    stack_result = []
+    index = 0
+    while index < len(s):
+        inputs = ["&", s[index]]
+        pops = ["&"]
+        if len(stack_symbol) > 3:
+            pops.append(stack_symbol[-3] + stack_symbol[-2] + stack_symbol[-1])
+        if len(stack_symbol) > 2:
+            pops.append(stack_symbol[-2] + stack_symbol[-1])
+        if len(stack_symbol) > 1:
+            pops.append(stack_symbol[-1])
+
+        reject = True
+        found = False
+        # check which transition is the correct one, or no transition at all
+        for input in inputs:
+            for pop in pops:
+                transitions_input = input
+                transitions_pop = pop
+                if transitions_input in Σ:
+                    transitions_input = "a"
+                if transitions_pop in Σ:
+                    transitions_pop = "a"
+
+                if not transitions.get((transitions_input, transitions_pop), None):
+                    continue
+
+                if stack_symbol[-1 if transitions_pop == "&" else -len(transitions_pop) - 1] in \
+                        transitions[(transitions_input, transitions_pop)]["below"] and s[index] in \
+                        transitions[(transitions_input, transitions_pop)]["next"]:
+                    reject = False
+                    if transitions_input != "&":
+                        index += 1
+                    if transitions_pop != "&":
+                        for _ in range(len(transitions_pop)):
+                            stack_symbol.pop()
+
+                    if transitions_input in Σ:
+                        stack_symbol += input
+                    else:
+                        stack_symbol.append(transitions[(transitions_input, transitions_pop)]["push"][0])
+
+                    subscript = transitions[(transitions_input, transitions_pop)]["push"][1]
+                    if subscript:
+                        if subscript == "union" or subscript == "concat":
+                            beta = stack_result.pop()
+                            alpha = stack_result.pop()
+                            stack_result.append(f"{subscript}({alpha},{beta})")
+                        elif subscript == "epsilon":
+                            stack_result.append("epsilon()")
+                        elif subscript == "star":
+                            alpha = stack_result.pop()
+                            stack_result.append(f"star({alpha})")
+                        else:
+                            stack_result.append(f"symbol(\"{pop}\")")
+                    found = True
+                    break
+                else:
+                    continue
+            if found:
+                break
+
+        if reject:
+            return False, None
+
+        if s[index] == "⊣" and len(stack_symbol) == 2 and stack_symbol[0] == "$" and stack_symbol[1] == "E":
+            return True, stack_result[0]
+
+
+def main(arguments=sys.argv[1:]):
+    accept, result = parser(arguments[0])
+    if accept:
+        print(result)
+
+if __name__ == '__main__':
+    main()

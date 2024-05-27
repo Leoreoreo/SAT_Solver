@@ -1,0 +1,154 @@
+#!/bin/python3
+import argparse
+from collections import defaultdict
+from collections import deque
+class NFA:
+    def __init__(self, states, alphabet, transitions, start_state, accept_states):
+        self.states = states                # Set[str]
+        self.alphabet = alphabet            # Set[str]
+        self.transitions = transitions      # Dict[str, Dict[str, set[str]]]
+        self.start_state = start_state      # Set[str]
+        self.accept_states = accept_states  # Set[str]
+    
+    def print(self):
+        print(f'states: {self.states}')
+        print(f'alphabet: {self.alphabet}')
+        print(f'transitions: {self.transitions}')
+        print(f'start_state: {self.start_state}'),
+        print(f'accept_states: {self.accept_states}') 
+    
+    # def move(self, state, symbol):
+    #     next_states = self.transitions[state][symbol]
+    #     return next_states
+    
+    # def e_move(self, state):
+    #     next_states = set()
+    #     for transition in self.transitions:
+    #         if transition[0] == state and transition[2] == "&":
+    #             next_states.add(transition[1])
+    #     return next_states
+
+
+def read_nfa(file):
+    with open(file, 'r') as f:
+        lines = f.readlines()
+
+    states = set(lines[0].split())
+    alphabet = set(lines[1].split())
+    start_state = lines[2].strip()
+    accept_states = set(lines[3].split())
+
+    transitions:dict[str,dict[str,list[str]]] = defaultdict(lambda: defaultdict(set))
+    for line in lines[4:]:
+        parts = line.split()
+        transitions[parts[0]][parts[1]].add(parts[2])
+
+    return NFA(states, alphabet, transitions, start_state, accept_states)
+
+'''
+nfa_1 = read_nfa('../examples/sipser-n1.nfa')
+nfa_1.print()
+#print(nfa_1.move('q1', '1'))
+
+states: {'q3', 'q1', 'q4', 'q2'}
+alphabet: {'1', '0'}
+transitions: defaultdict(<function read_nfa.<locals>.<lambda> at 0x7fac12721158>, 
+{'q1': defaultdict(<class 'list'>, {'0': ['q1'], '1': ['q1', 'q2']}), 
+'q2': defaultdict(<class 'list'>, {'0': ['q3'], '&': ['q3']}), 
+'q3': defaultdict(<class 'list'>, {'1': ['q4']}), 
+'q4': defaultdict(<class 'list'>, {'0': ['q4'], '1': ['q4']})})
+start_state: q1
+accept_states: {'q4'}
+'''
+def write_nfa(M, file):
+    with open(file, 'w') as f:
+        print(' '.join(list(M.states)), file=f)
+        print(' '.join(list(M.alphabet)), file=f)
+        print(M.start_state, file=f)
+        print(' '.join(list(M.accept_states)), file=f)
+        for q, transition in M.transitions.items():
+            for symbol, target in transition.items():
+                for accept in target:
+                    print(f'{q} {symbol} {accept}', file=f)
+
+# nfa_1 = read_nfa('../examples/sipser-n1.nfa')
+# write_nfa(nfa_1, "temp.txt")
+
+
+def match(M, w):
+    # doing bfs
+    frontier = deque([(M.start_state, 0)])
+    w_len = len(w)
+    graph = {}          # graph := { (q, cur_wd_len): [(last_q, last_wd_len)], }, used this to retrace the path
+
+    while frontier:
+        cur_state, cur_wd_len = frontier.popleft()
+
+        if (cur_state, cur_wd_len) not in graph:  # create new key in graph
+            graph[(cur_state, cur_wd_len)] = (None, None)
+
+        if cur_wd_len < w_len:
+            next_symbol = w[cur_wd_len]  # step to new symbol
+
+            next_states = M.transitions[cur_state][next_symbol]
+            for next_state in next_states:
+                new_config = (next_state, cur_wd_len + 1)
+                if new_config not in graph:  # only consider new (state, wordlen)
+                    graph[new_config] = (cur_state, cur_wd_len)
+                    frontier.append(new_config)
+            
+        next_states = M.transitions[cur_state]['&']
+        for next_state in next_states:
+            new_config = (next_state, cur_wd_len)
+            if new_config not in graph:  # only consider new (state, wordlen)
+                graph[new_config] = (cur_state, cur_wd_len)
+                frontier.append(new_config)
+
+    
+    # print(graph)
+    accepting_configs = [(state, wd_len) for (state, wd_len) in graph.keys() if wd_len == w_len and state in M.accept_states]
+
+    if len(accepting_configs) > 0:  # word accepted
+        # Reconstruct path
+        path = []
+        accepting_config = accepting_configs[0]
+        while accepting_config[0]:
+            path.append(accepting_config)
+            accepting_config = graph.get(accepting_config, [])
+
+        return True, path[::-1]
+    else:
+        return False, []
+
+def print_path(path, w):
+    print("accept")
+    w_i = 0
+    for i in range(len(path) - 1):
+        current_config = path[i]
+        next_config = path[i + 1]
+        if current_config[1] < next_config[1]:
+            print(f"{current_config[0]} {w[w_i]} {next_config[0]}")
+            w_i += 1
+        else:
+            print(f"{current_config[0]} & {next_config[0]}")
+
+
+def get_path(file_path, w):
+    nfa = read_nfa(file_path) 
+    matched, path = match(nfa, w)
+    if matched:
+        print_path(path, w)
+    else:
+        print("reject")
+        
+def main():
+    parser = argparse.ArgumentParser(description="NFA Path Command-Line Tool")
+    parser.add_argument("file_path", help="Name of file defining an NFA M")
+    parser.add_argument("string", help="String to run M on")
+
+    args = parser.parse_args()
+    get_path(args.file_path, args.string)
+
+if __name__ == '__main__':
+    main()
+    

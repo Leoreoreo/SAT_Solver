@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+import sys
+from re_to_nfa import re_to_nfa
+from nfa import NFA, group_match
+
+
+
+def get_group_dic(path, w):
+    w_i = 0
+    afea = 0
+    group_stack = []
+    stack_dic = {}      # {fake_group_num: ''}
+    for i in range(len(path) - 1):
+        current_config = path[i]
+        next_config = path[i + 1]
+        cur_w = '&'
+        cur_state = current_config[0]
+        next_state = next_config[0]
+
+        if current_config[1] < next_config[1]:
+            cur_w = w[w_i]
+            w_i += 1
+
+        if len(cur_state) > 5 and cur_state[-5:] == '_OPEN':
+            num = ""
+            j = len(cur_state) - 5 - 1
+            while j >= 0 and cur_state[j].isdigit():
+                num = cur_state[j] + num
+                j -= 1
+            num = int(num)
+            group_stack.append(num)
+            stack_dic[num] = ''     # create new key & overwrite original
+
+        if cur_w != '&':
+            for group_num in group_stack:
+                stack_dic[group_num] += cur_w
+
+        if len(next_state) > 6 and next_state[-6:] == '_CLOSE':
+            group_stack.pop()
+
+    return stack_dic
+
+def main(arguments=sys.argv[1:]):
+    if len(arguments) != 2: 
+        return
+    accept, nfa, group_num_table = re_to_nfa(arguments[0])
+
+    if not accept:
+        return
+    w = arguments[1]
+    accept, path = group_match(nfa, w) 
+    if accept:
+        print('accept') 
+        stack_dic = get_group_dic(path, w)
+        for fake_group_num, string in stack_dic.items():
+            print(f'{group_num_table[fake_group_num]}:{string}')
+    else:
+        print('reject')
+
+if __name__ == '__main__':
+    main()
