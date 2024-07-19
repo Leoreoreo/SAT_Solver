@@ -35,7 +35,7 @@ Output: strings that match the regexp
 ## CP3: Sed Simulator
 
 Add group to the regexp parser to simulate the mini-sed (msed).
-Prove msed is Turing-complete by impelmenting a translation from Turing machines to msed.
+Prove msed is Turing-Complete by implementing a translation from Turing machines to msed.
 
 <img width="414" alt="截屏2024-05-28 12 02 40" src="https://github.com/Leoreoreo/SAT_Solver/assets/87118867/cfe9f137-2a6e-4fc6-8da5-75579e475fa6">
 
